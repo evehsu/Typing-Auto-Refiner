@@ -15,14 +15,18 @@ client = OpenAI(
 
 
 def load_prompt(prompt_path, version_name):
-    with open(prompt_path, "r") as f:
+    # Get the directory of the current script
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    # Construct the absolute path to the prompt file
+    absolute_prompt_path = os.path.join(current_dir, prompt_path)
+    
+    with open(absolute_prompt_path, "r") as f:
         prompts = yaml.safe_load(f)
-
+    
     if version_name not in prompts:
         raise ValueError(f"Prompt version '{version_name}' not found in the YAML file.")
-
+    
     return prompts[version_name]
-
 
 def error_handler(func):
     @functools.wraps(func)
@@ -32,9 +36,7 @@ def error_handler(func):
         except Exception as e:
             logging.error(f"Error in {func.__name__}: {e}")
             return ""
-
     return wrapper
-
 
 @error_handler
 def get_auto_corrected_text(text):
@@ -43,13 +45,12 @@ def get_auto_corrected_text(text):
         model="gpt-3.5-turbo",
         messages=[
             {"role": "system", "content": prompt},
-            {"role": "user", "content": text},
+            {"role": "user", "content": text}
         ],
-        max_tokens=1000,
+        max_tokens=1000
     )
     auto_corrected_text_response = api_response.choices[0].message.content.strip()
     return auto_corrected_text_response
-
 
 @error_handler
 def get_tuned_text(text, tone):
@@ -59,19 +60,10 @@ def get_tuned_text(text, tone):
     print(user_prompt_formatted)
     toned_text_response = client.chat.completions.create(
         model="gpt-4o-mini",
-        messages=[
+        messages = [            
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt_formatted},
-        ],
-        max_tokens=1000,
+            {"role": "user", "content": user_prompt_formatted}
+            ],
+        max_tokens=1000
     )
     return toned_text_response.choices[0].message.content.strip()
-
-
-if __name__ == "__main__":
-    print(os.getenv("OPENAI_API_KEY"))
-    text = "helo how are ou todya?"
-    auto_corrected_text = get_auto_corrected_text(text)
-    toned_text = get_tuned_text(auto_corrected_text, "formal")
-    print(auto_corrected_text)
-    print(toned_text)
