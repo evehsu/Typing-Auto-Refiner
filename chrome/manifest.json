@@ -1,0 +1,19 @@
+{
+    "manifest_version": 3,
+    "name": "Text Auto-Correction and Tone Tuning",
+    "version": "1.0",
+    "description": "Auto-correct and tune the tone of selected text",
+    "permissions": ["contextMenus", "activeTab"],
+    "background": {
+      "service_worker": "background.js"
+    },
+    "content_scripts": [
+      {
+        "matches": ["<all_urls>"],
+        "js": ["content.js"]
+      }
+    ],
+    "action": {
+      "default_popup": "popup.html"
+    }
+}
