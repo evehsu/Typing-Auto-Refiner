@@ -3,17 +3,24 @@
     "name": "Text Auto-Correction and Tone Tuning",
     "version": "1.0",
     "description": "Auto-correct and tune the tone of selected text",
-    "permissions": ["contextMenus", "activeTab"],
+    "permissions": [
+        "contextMenus",
+        "activeTab",
+        "scripting"
+    ],
+    "host_permissions": [
+        "<all_urls>"
+    ],
     "background": {
-      "service_worker": "background.js"
+        "service_worker": "background.js"
     },
     "content_scripts": [
-      {
-        "matches": ["<all_urls>"],
-        "js": ["content.js"]
-      }
+        {
+            "matches": ["<all_urls>"],
+            "js": ["content.js"]
+        }
     ],
     "action": {
-      "default_popup": "popup.html"
+        "default_popup": "popup.html"
     }
 }
