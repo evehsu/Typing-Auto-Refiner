@@ -15,17 +15,27 @@ chrome.runtime.onInstalled.addListener(() => {
     chrome.contextMenus.create({
       id: "toneTuning",
       title: "Tone Tuning",
-      parentId: "textCorrection",
       contexts: ["selection"]
+    });
+
+    const tones = ["Professional", "Friendly", "Strong", "Humorous", "Aggressive"];
+
+    tones.forEach(tone => {
+      chrome.contextMenus.create({
+        id: `tone_${tone.toLowerCase()}`,
+        parentId: "toneTuning",
+        title: tone,
+        contexts: ["selection"]
+      });
     });
   });
   
   chrome.contextMenus.onClicked.addListener((info, tab) => {
-    if (info.menuItemId === "autoCorrection" || info.menuItemId === "toneTuning") {
+    if (info.menuItemId === "autoCorrection" || info.menuItemId.startsWith("tone_")) {
       const endpoint = info.menuItemId === "autoCorrection" ? 'auto-correct' : 'tune-text';
       const body = info.menuItemId === "autoCorrection" 
         ? {text: info.selectionText}
-        : {text: info.selectionText, tone: 'default'};
+        : {text: info.selectionText, tone: info.menuItemId.split("_")[1]};
 
       fetch(`http://localhost:8000/${endpoint}`, {
         method: 'POST',
@@ -43,6 +53,8 @@ chrome.runtime.onInstalled.addListener(() => {
       })
       .catch(error => console.error('Error:', error));
     }
+    
+    // Removed the tone tuning block as per the instructions
   });
 
   function injectContentScriptAndSendMessage(tabId, message) {
@@ -58,25 +70,27 @@ chrome.runtime.onInstalled.addListener(() => {
           } else {
             // Wait for the content script to load
             setTimeout(() => {
-              chrome.tabs.sendMessage(tabId, message, (response) => {
-                if (chrome.runtime.lastError) {
-                  console.error('Error sending message:', chrome.runtime.lastError.message);
-                } else {
-                  console.log('Message sent successfully');
-                }
-              });
+              sendMessageWithRetry(tabId, message);
             }, 100);
           }
         });
       } else {
         // Content script is already loaded, send message directly
-        chrome.tabs.sendMessage(tabId, message, (response) => {
-          if (chrome.runtime.lastError) {
-            console.error('Error sending message:', chrome.runtime.lastError.message);
-          } else {
-            console.log('Message sent successfully');
-          }
-        });
+        sendMessageWithRetry(tabId, message);
+      }
+    });
+  }
+
+  function sendMessageWithRetry(tabId, message, retries = 3) {
+    chrome.tabs.sendMessage(tabId, message, (response) => {
+      if (chrome.runtime.lastError) {
+        console.error('Error sending message:', chrome.runtime.lastError.message);
+        if (retries > 0) {
+          console.log(`Retrying... (${retries} attempts left)`);
+          setTimeout(() => sendMessageWithRetry(tabId, message, retries - 1), 200);
+        }
+      } else {
+        console.log('Message sent successfully');
       }
     });
   }

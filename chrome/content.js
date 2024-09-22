@@ -15,25 +15,63 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === "updateText") {
       console.log("Updating text with:", request.text);
       createTempElement(range, request.text);
+    } else if (request.action === "tuneTone") {
+      promptForTone(selectedText, range);
     } else {
-      chrome.runtime.sendMessage({
-        action: request.action === "autoCorrect" ? "getAutoCorrection" : "getToneTuning",
-        text: selectedText,
-        tone: "formal" // You can make this configurable
-      }, response => {
-        console.log("Received response from background script:", response);
-        if (response.error) {
-          console.error("Error from background script:", response.error);
-          return;
-        }
-        
-        console.log("Creating temp element with result:", response.result);
-        createTempElement(range, response.result);
-      });
+      sendRequest(request.action, selectedText, "professional", range);
     }
   }
   return true; // Indicates that the response is sent asynchronously
 });
+
+function promptForTone(selectedText, range) {
+  const tonePrompt = document.createElement('div');
+  tonePrompt.style.position = 'fixed';
+  tonePrompt.style.zIndex = '2147483647';
+  tonePrompt.style.backgroundColor = 'white';
+  tonePrompt.style.border = '1px solid black';
+  tonePrompt.style.padding = '10px';
+  tonePrompt.style.boxShadow = '0 2px 10px rgba(0,0,0,0.2)';
+  
+  const toneInput = document.createElement('input');
+  toneInput.type = 'text';
+  toneInput.placeholder = 'Enter desired tone (default: professional)';
+  toneInput.style.marginRight = '10px';
+  tonePrompt.appendChild(toneInput);
+  
+  const submitButton = document.createElement('button');
+  submitButton.textContent = 'Submit';
+  submitButton.onclick = () => {
+    const tone = toneInput.value.trim() || 'professional';
+    tonePrompt.remove();
+    sendRequest('getToneTuning', selectedText, tone, range);
+  };
+  tonePrompt.appendChild(submitButton);
+  
+  const rect = range.getBoundingClientRect();
+  tonePrompt.style.left = `${rect.left + window.scrollX}px`;
+  tonePrompt.style.top = `${rect.bottom + window.scrollY}px`;
+  
+  document.body.appendChild(tonePrompt);
+  toneInput.focus();
+}
+
+function sendRequest(action, text, tone, range) {
+  chrome.runtime.sendMessage({
+    action: action,
+    text: text,
+    tone: tone
+  }, response => {
+    console.log("Received response from background script:", response);
+    if (response.error) {
+      console.error("Error from background script:", response.error);
+      return;
+    }
+    
+    console.log("Creating temp element with result:", response.result);
+    createTempElement(range, response.result);
+  });
+}
 
 function createTempElement(range, result) {
   console.log("Creating temp element with result:", result);
@@ -87,7 +125,7 @@ function createTempElement(range, result) {
     left = viewportWidth - window.tempElement.offsetWidth;
   }
   
-  window.tempElement.style.left = `${left}px`;
+  window.tempElement.style.left = `${left}px`;s
   window.tempElement.style.top = `${top}px`;
   
   document.body.appendChild(window.tempElement);
