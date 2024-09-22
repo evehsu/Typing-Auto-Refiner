@@ -34,30 +34,49 @@ chrome.runtime.onInstalled.addListener(() => {
       })
       .then(response => response.json())
       .then(data => {
-        const text = info.menuItemId === "autoCorrection" ? data.correctedText : data.tunedText;
-        injectContentScriptAndSendMessage(tab.id, {action: "updateText", text: text});
+        const text = info.menuItemId === "autoCorrection" ? data.corrected_text : data.tuned_text;
+        if (text) {
+          injectContentScriptAndSendMessage(tab.id, {action: "updateText", text: text});
+        } else {
+          console.error('Error: Received empty text from server');
+        }
       })
       .catch(error => console.error('Error:', error));
     }
   });
 
   function injectContentScriptAndSendMessage(tabId, message) {
-    chrome.scripting.executeScript({
-      target: { tabId: tabId },
-      files: ['content.js']
-    }, () => {
+    chrome.tabs.sendMessage(tabId, { action: "checkContentScriptLoaded" }, (response) => {
       if (chrome.runtime.lastError) {
-        console.error('Error injecting content script:', chrome.runtime.lastError.message);
+        // Content script is not loaded, inject it
+        chrome.scripting.executeScript({
+          target: { tabId: tabId },
+          files: ['content.js']
+        }, () => {
+          if (chrome.runtime.lastError) {
+            console.error('Error injecting content script:', chrome.runtime.lastError.message);
+          } else {
+            // Wait for the content script to load
+            setTimeout(() => {
+              chrome.tabs.sendMessage(tabId, message, (response) => {
+                if (chrome.runtime.lastError) {
+                  console.error('Error sending message:', chrome.runtime.lastError.message);
+                } else {
+                  console.log('Message sent successfully');
+                }
+              });
+            }, 100);
+          }
+        });
       } else {
-        setTimeout(() => {
-          chrome.tabs.sendMessage(tabId, message, (response) => {
-            if (chrome.runtime.lastError) {
-              console.error('Error sending message:', chrome.runtime.lastError.message);
-            } else {
-              console.log('Message sent successfully');
-            }
-          });
-        }, 100); // Small delay to ensure content script is fully loaded
+        // Content script is already loaded, send message directly
+        chrome.tabs.sendMessage(tabId, message, (response) => {
+          if (chrome.runtime.lastError) {
+            console.error('Error sending message:', chrome.runtime.lastError.message);
+          } else {
+            console.log('Message sent successfully');
+          }
+        });
       }
     });
   }
