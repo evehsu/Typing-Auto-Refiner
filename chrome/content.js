@@ -1,20 +1,76 @@
-// Check if tempElement is already defined in the global scope
+// Check if variables are already defined in the global scope
 if (typeof window.tempElement === 'undefined') {
   window.tempElement = null;
 }
+if (typeof window.isDisplayingTempElement === 'undefined') {
+  window.isDisplayingTempElement = false;
+}
+if (typeof window.debounceTimer === 'undefined') {
+  window.debounceTimer = null;
+}
+if (typeof window.lastProcessedRange === 'undefined') {
+  window.lastProcessedRange = null;
+}
+if (typeof window.debouncedCreateTempElement === 'undefined') {
+  window.debouncedCreateTempElement = null;
+}
+
+// Add a new variable to track if a request is in progress
+if (typeof window.isRequestInProgress === 'undefined') {
+  window.isRequestInProgress = false;
+}
+
+function debounce(func, delay) {
+  return function() {
+    clearTimeout(window.debounceTimer);
+    window.debounceTimer = setTimeout(() => func.apply(this, arguments), delay);
+  };
+}
+
+window.debouncedCreateTempElement = debounce((range, result) => {
+  // Check if this range has already been processed
+  if (window.lastProcessedRange && 
+      window.lastProcessedRange.startContainer === range.startContainer &&
+      window.lastProcessedRange.startOffset === range.startOffset &&
+      window.lastProcessedRange.endContainer === range.endContainer &&
+      window.lastProcessedRange.endOffset === range.endOffset) {
+    console.log("This range has already been processed. Skipping.");
+    return;
+  }
+
+  // Update the last processed range
+  window.lastProcessedRange = range.cloneRange();
+
+  createTempElement(range, result);
+}, 300);
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   console.log("Received message:", request);
   if (request.action === "autoCorrect" || request.action === "tuneTone" || request.action === "updateText") {
-    const selectedText = window.getSelection().toString();
-    const range = window.getSelection().getRangeAt(0);
+    // Check if a request is already in progress
+    if (window.isRequestInProgress) {
+      console.log("A request is already in progress. Skipping.");
+      return true;
+    }
+
+    const selection = window.getSelection();
+    if (selection.rangeCount === 0) {
+      console.log("No range selected. Skipping.");
+      return true;
+    }
+
+    const selectedText = selection.toString();
+    const range = selection.getRangeAt(0);
     
     console.log("Selected text:", selectedText);
     console.log("Action:", request.action);
     
+    // Set the flag to indicate a request is in progress
+    window.isRequestInProgress = true;
+
     if (request.action === "updateText") {
       console.log("Updating text with:", request.text);
-      createTempElement(range, request.text);
+      window.debouncedCreateTempElement(range, request.text);
     } else if (request.action === "tuneTone") {
       promptForTone(selectedText, range);
     } else {
@@ -65,16 +121,19 @@ function sendRequest(action, text, tone, range) {
     console.log("Received response from background script:", response);
     if (response.error) {
       console.error("Error from background script:", response.error);
-      return;
+    } else {
+      console.log("Creating temp element with result:", response.result);
+      createTempElement(range, response.result);
     }
-    
-    console.log("Creating temp element with result:", response.result);
-    createTempElement(range, response.result);
+    // Reset the flag after the request is complete
+    window.isRequestInProgress = false;
   });
 }
 
 function createTempElement(range, result) {
   console.log("Creating temp element with result:", result);
+  
+  // Remove existing temp element if it exists
   if (window.tempElement) {
     window.tempElement.remove();
   }
@@ -100,12 +159,20 @@ function createTempElement(range, result) {
   
   const applyButton = document.createElement('button');
   applyButton.textContent = 'Apply';
-  applyButton.onclick = () => applyChanges(range, textArea.value);
+  applyButton.onclick = () => {
+    applyChanges(range, textArea.value);
+    window.lastProcessedRange = null;  // Reset the last processed range
+    window.isRequestInProgress = false;
+  };
   buttonContainer.appendChild(applyButton);
   
   const rejectButton = document.createElement('button');
   rejectButton.textContent = 'Reject';
-  rejectButton.onclick = () => window.tempElement.remove();
+  rejectButton.onclick = () => {
+    window.tempElement.remove();
+    window.lastProcessedRange = null;  // Reset the last processed range
+    window.isRequestInProgress = false;
+  };
   buttonContainer.appendChild(rejectButton);
   
   window.tempElement.appendChild(buttonContainer);
@@ -125,7 +192,7 @@ function createTempElement(range, result) {
     left = viewportWidth - window.tempElement.offsetWidth;
   }
   
-  window.tempElement.style.left = `${left}px`;s
+  window.tempElement.style.left = `${left}px`;
   window.tempElement.style.top = `${top}px`;
   
   document.body.appendChild(window.tempElement);
