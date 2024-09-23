@@ -46,7 +46,7 @@ chrome.runtime.onInstalled.addListener(() => {
       .then(data => {
         const text = info.menuItemId === "autoCorrection" ? data.corrected_text : data.tuned_text;
         if (text) {
-          injectContentScriptAndSendMessage(tab.id, {action: "updateText", text: text});
+          sendMessageToContentScript(tab.id, {action: "updateText", text: text});
         } else {
           console.error('Error: Received empty text from server');
         }
@@ -57,10 +57,11 @@ chrome.runtime.onInstalled.addListener(() => {
     // Removed the tone tuning block as per the instructions
   });
 
-  function injectContentScriptAndSendMessage(tabId, message) {
-    chrome.tabs.sendMessage(tabId, { action: "checkContentScriptLoaded" }, (response) => {
+  function sendMessageToContentScript(tabId, message) {
+    chrome.tabs.sendMessage(tabId, message, (response) => {
       if (chrome.runtime.lastError) {
-        // Content script is not loaded, inject it
+        console.error('Error sending message:', chrome.runtime.lastError.message);
+        // If the content script is not loaded, inject it and try again
         chrome.scripting.executeScript({
           target: { tabId: tabId },
           files: ['content.js']
@@ -68,27 +69,10 @@ chrome.runtime.onInstalled.addListener(() => {
           if (chrome.runtime.lastError) {
             console.error('Error injecting content script:', chrome.runtime.lastError.message);
           } else {
-            // Wait for the content script to load
-            setTimeout(() => {
-              sendMessageWithRetry(tabId, message);
-            }, 100);
+            // Retry sending the message immediately after injection
+            chrome.tabs.sendMessage(tabId, message);
           }
         });
-      } else {
-        // Content script is already loaded, send message directly
-        sendMessageWithRetry(tabId, message);
-      }
-    });
-  }
-
-  function sendMessageWithRetry(tabId, message, retries = 3) {
-    chrome.tabs.sendMessage(tabId, message, (response) => {
-      if (chrome.runtime.lastError) {
-        console.error('Error sending message:', chrome.runtime.lastError.message);
-        if (retries > 0) {
-          console.log(`Retrying... (${retries} attempts left)`);
-          setTimeout(() => sendMessageWithRetry(tabId, message, retries - 1), 200);
-        }
       } else {
         console.log('Message sent successfully');
       }
